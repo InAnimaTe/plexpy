@@ -23,10 +23,6 @@ import ssl
 
 
 class HTTPHandler(object):
-    """
-    Retrieve data from Plex Server
-    """
-
     def __init__(self, host, port, token, ssl_verify=True):
         self.host = host
         self.port = str(port)
@@ -48,11 +44,18 @@ class HTTPHandler(object):
 
         valid_request_types = ['GET', 'POST', 'PUT', 'DELETE']
 
+        if not headers:
+            headers = {}
+
         if request_type.upper() not in valid_request_types:
             logger.debug(u"HTTP request made but unsupported request type given.")
             return None
 
         if uri:
+            # Enable for debugging
+            # logger.debug(u"PlexPy HTTP Handler :: [%s] %s://%s:%s%s" %
+            #              (request_type.upper(), proto.lower(), self.host, self.port, uri))
+
             if proto.upper() == 'HTTPS':
                 if not self.ssl_verify and hasattr(ssl, '_create_unverified_context'):
                     context = ssl._create_unverified_context()
@@ -63,18 +66,11 @@ class HTTPHandler(object):
             else:
                 handler = HTTPConnection(host=self.host, port=self.port, timeout=10)
 
-            token_string = ''
             if not no_token:
-                if uri.find('?') > 0:
-                    token_string = '&X-Plex-Token=' + self.token
-                else:
-                    token_string = '?X-Plex-Token=' + self.token
+                headers['X-Plex-Token'] = self.token
 
             try:
-                if headers:
-                    handler.request(request_type, uri + token_string, headers=headers)
-                else:
-                    handler.request(request_type, uri + token_string)
+                handler.request(request_type, uri, headers=headers)
                 response = handler.getresponse()
                 request_status = response.status
                 request_content = response.read()
