@@ -20,14 +20,19 @@ from plexpy import logger, helpers
 from httplib import HTTPSConnection
 from httplib import HTTPConnection
 import ssl
+import plexpy
 
 
 class HTTPHandler(object):
-    def __init__(self, host, port, token, ssl_verify=True):
+    def __init__(self, host, port, token=None, ssl_verify=True):
         self.host = host
         self.port = str(port)
         self.token = token
-        self.ssl_verify = ssl_verify
+
+        if not plexpy.CONFIG.VERIFY_SSL_CERT:
+            self.ssl_verify = False
+        else:
+            self.ssl_verify = ssl_verify
 
     """
     Handle the HTTP requests.
@@ -40,7 +45,8 @@ class HTTPHandler(object):
                      headers=None,
                      output_format='raw',
                      return_type=False,
-                     no_token=False):
+                     no_token=False,
+                     body=None):
 
         valid_request_types = ['GET', 'POST', 'PUT', 'DELETE']
 
@@ -52,9 +58,11 @@ class HTTPHandler(object):
             return None
 
         if uri:
+            request_url = '%s://%s:%s%s' % (proto.lower(), self.host, self.port, uri)
+
             # Enable for debugging
-            # logger.debug(u"PlexPy HTTP Handler :: [%s] %s://%s:%s%s" %
-            #              (request_type.upper(), proto.lower(), self.host, self.port, uri))
+            logger.debug(u"PlexPy HTTP Handler :: [%s] %s" %
+                         (request_type.upper(), request_url))
 
             if proto.upper() == 'HTTPS':
                 if not self.ssl_verify and hasattr(ssl, '_create_unverified_context'):
@@ -70,19 +78,20 @@ class HTTPHandler(object):
                 headers['X-Plex-Token'] = self.token
 
             try:
-                handler.request(request_type, uri, headers=headers)
+                handler.request(method=request_type, url=uri, body=body, headers=headers)
                 response = handler.getresponse()
                 request_status = response.status
                 request_content = response.read()
                 content_type = response.getheader('content-type')
             except IOError, e:
-                logger.warn(u"Failed to access uri endpoint %s with error %s" % (uri, e))
+                logger.warn(u"PlexPy HTTP Handler :: Failed to access %s with error %s" % (request_url, e))
                 return None
             except Exception, e:
-                logger.warn(u"Failed to access uri endpoint %s. Is your server maybe accepting SSL connections only? %s" % (uri, e))
+                logger.warn(u"PlexPy HTTP Handler :: Failed to access %s. "
+                            u"Is the remote host accepting SSL connections only? %s" % (request_url, e))
                 return None
             except:
-                logger.warn(u"Failed to access uri endpoint %s with Uncaught exception." % uri)
+                logger.warn(u"PlexPy HTTP Handler :: Failed to access %s with Uncaught exception." % request_url)
                 return None
 
             if request_status == 200:
@@ -102,12 +111,14 @@ class HTTPHandler(object):
                     return output
 
                 except Exception as e:
-                    logger.warn(u"Failed format response from uri %s to %s error %s" % (uri, output_format, e))
+                    logger.warn(u"PlexPy HTTP Handler :: Failed format response from %s to %s error %s"
+                                % (request_url, output_format, e))
                     return None
 
             else:
-                logger.warn(u"Failed to access uri endpoint %s. Status code %r" % (uri, request_status))
+                logger.warn(u"PlexPy HTTP Handler :: Failed to access %s. Status code %r: %r"
+                            % (request_url, request_status, request_content))
                 return None
         else:
-            logger.debug(u"HTTP request made but no enpoint given.")
+            logger.debug(u"PlexPy HTTP Handler :: HTTP request made but no endpoint given.")
             return None

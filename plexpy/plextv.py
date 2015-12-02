@@ -107,12 +107,10 @@ class PlexTV(object):
         self.protocol = 'HTTPS'
         self.username = username
         self.password = password
-        self.ssl_verify = plexpy.CONFIG.VERIFY_SSL_CERT
 
         self.request_handler = http_handler.HTTPHandler(host='plex.tv',
                                                         port=443,
-                                                        token=plexpy.CONFIG.PMS_TOKEN,
-                                                        ssl_verify=self.ssl_verify)
+                                                        token=plexpy.CONFIG.PMS_TOKEN)
 
     def get_plex_auth(self, output_format='raw'):
         uri = '/users/sign_in.xml'

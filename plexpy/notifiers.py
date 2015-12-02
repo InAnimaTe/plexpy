@@ -13,7 +13,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with PlexPy.  If not, see <http://www.gnu.org/licenses/>.
 
-from plexpy import logger, helpers, common, request
+from plexpy import logger, helpers, common, request, http_handler
 from plexpy.helpers import checked, radio
 
 from xml.dom import minidom
@@ -501,7 +501,7 @@ class PROWL(object):
         if not message or not event:
             return
 
-        http_handler = HTTPSConnection("api.prowlapp.com")
+        http_call = HTTPSConnection("api.prowlapp.com")
 
         data = {'apikey': plexpy.CONFIG.PROWL_KEYS,
                 'application': 'PlexPy',
@@ -509,11 +509,11 @@ class PROWL(object):
                 'description': message.encode("utf-8"),
                 'priority': plexpy.CONFIG.PROWL_PRIORITY}
 
-        http_handler.request("POST",
+        http_call.request("POST",
                                 "/publicapi/add",
                                 headers={'Content-type': "application/x-www-form-urlencoded"},
                                 body=urlencode(data))
-        response = http_handler.getresponse()
+        response = http_call.getresponse()
         request_status = response.status
 
         if request_status == 200:
@@ -784,15 +784,13 @@ class NMA(object):
 
         return config_option
 
+
 class PUSHBULLET(object):
 
     def __init__(self):
         self.apikey = plexpy.CONFIG.PUSHBULLET_APIKEY
         self.deviceid = plexpy.CONFIG.PUSHBULLET_DEVICEID
         self.channel_tag = plexpy.CONFIG.PUSHBULLET_CHANNEL_TAG
-        self.on_play = plexpy.CONFIG.PUSHBULLET_ON_PLAY
-        self.on_stop = plexpy.CONFIG.PUSHBULLET_ON_STOP
-        self.on_watched = plexpy.CONFIG.PUSHBULLET_ON_WATCHED
 
     def conf(self, options):
         return cherrypy.config['config'].get('PUSHBULLET', options)
@@ -800,8 +798,6 @@ class PUSHBULLET(object):
     def notify(self, message, subject):
         if not message or not subject:
             return
-
-        http_handler = HTTPSConnection("api.pushbullet.com")
 
         data = {'type': "note",
                 'title': subject.encode("utf-8"),
@@ -813,30 +809,18 @@ class PUSHBULLET(object):
         elif self.channel_tag:
             data['channel_tag'] = self.channel_tag
 
-        http_handler.request("POST",
-                                "/v2/pushes",
-                                headers={'Content-type': "application/json",
-                                         'Authorization': 'Basic %s' % base64.b64encode(plexpy.CONFIG.PUSHBULLET_APIKEY + ":")},
-                                body=json.dumps(data))
-        response = http_handler.getresponse()
-        request_status = response.status
-        # logger.debug(u"PushBullet response status: %r" % request_status)
-        # logger.debug(u"PushBullet response headers: %r" % response.getheaders())
-        # logger.debug(u"PushBullet response body: %r" % response.read())
+        headers = {'Content-type': "application/json",
+                   'Authorization': 'Basic %s' % base64.b64encode(self.apikey + ":")}
 
-        if request_status == 200:
-                logger.info(u"PushBullet notifications sent.")
-                return True
-        elif request_status >= 400 and request_status < 500:
-                logger.info(u"PushBullet request failed: %s" % response.reason)
-                return False
-        else:
-                logger.info(u"PushBullet notification failed serverside.")
-                return False
+        http_request = http_handler.HTTPHandler(host='api.pushbullet.com', port=443)
+        http_request.make_request(uri='/v2/pushes',
+                                  proto='HTTPS',
+                                  request_type='POST',
+                                  headers=headers,
+                                  no_token=True,
+                                  body=json.dumps(data))
 
     def test(self, apikey, deviceid):
-
-        self.enabled = True
         self.apikey = apikey
         self.deviceid = deviceid
 
@@ -865,6 +849,7 @@ class PUSHBULLET(object):
 
         return config_option
 
+
 class PUSHALOT(object):
 
     def __init__(self):
@@ -883,17 +868,17 @@ class PUSHALOT(object):
         logger.debug(u"Pushalot message: " + message)
         logger.debug(u"Pushalot api: " + pushalot_authorizationtoken)
 
-        http_handler = HTTPSConnection("pushalot.com")
+        http_call = HTTPSConnection("pushalot.com")
 
         data = {'AuthorizationToken': pushalot_authorizationtoken,
                 'Title': event.encode('utf-8'),
                 'Body': message.encode("utf-8")}
 
-        http_handler.request("POST",
+        http_call.request("POST",
                                 "/api/sendmessage",
                                 headers={'Content-type': "application/x-www-form-urlencoded"},
                                 body=urlencode(data))
-        response = http_handler.getresponse()
+        response = http_call.getresponse()
         request_status = response.status
 
         #logger.debug(u"Pushalot response status: %r" % request_status)
@@ -944,7 +929,7 @@ class PUSHOVER(object):
         if not message or not event:
             return
 
-        http_handler = HTTPSConnection("api.pushover.net")
+        http_call = HTTPSConnection("api.pushover.net")
 
         data = {'token': self.application_token,
                 'user': plexpy.CONFIG.PUSHOVER_KEYS,
@@ -953,11 +938,11 @@ class PUSHOVER(object):
                 'sound': plexpy.CONFIG.PUSHOVER_SOUND,
                 'priority': plexpy.CONFIG.PUSHOVER_PRIORITY}
 
-        http_handler.request("POST",
+        http_call.request("POST",
                              "/1/messages.json",
                              headers={'Content-type': "application/x-www-form-urlencoded"},
                              body=urlencode(data))
-        response = http_handler.getresponse()
+        response = http_call.getresponse()
         request_status = response.status
         # logger.debug(u"Pushover response status: %r" % request_status)
         # logger.debug(u"Pushover response headers: %r" % response.getheaders())
@@ -986,9 +971,9 @@ class PUSHOVER(object):
         self.notify('Main Screen Activate', 'Test Message')
 
     def get_sounds(self):
-        http_handler = HTTPSConnection("api.pushover.net")
-        http_handler.request("GET", "/1/sounds.json?token=" + self.application_token)
-        response = http_handler.getresponse()
+        http_call = HTTPSConnection("api.pushover.net")
+        http_call.request("GET", "/1/sounds.json?token=" + self.application_token)
+        response = http_call.getresponse()
         request_status = response.status
         
         if request_status == 200:
@@ -1414,18 +1399,18 @@ class IFTTT(object):
         if not message or not subject:
             return
 
-        http_handler = HTTPSConnection("maker.ifttt.com")
+        http_call = HTTPSConnection("maker.ifttt.com")
 
         data = {'value1': subject.encode("utf-8"),
                 'value2': message.encode("utf-8")}
 
         # logger.debug("Ifttt SENDING: %s" % json.dumps(data))
 
-        http_handler.request("POST",
+        http_call.request("POST",
                              "/trigger/%s/with/key/%s" % (self.event, self.apikey),
                              headers={'Content-type': "application/json"},
                              body=json.dumps(data))
-        response = http_handler.getresponse()
+        response = http_call.getresponse()
         request_status = response.status
         # logger.debug(u"Ifttt response status: %r" % request_status)
         # logger.debug(u"Ifttt response headers: %r" % response.getheaders())
@@ -1482,17 +1467,17 @@ class TELEGRAM(object):
         if not message or not event:
             return
 
-        http_handler = HTTPSConnection("api.telegram.org")
+        http_call = HTTPSConnection("api.telegram.org")
 
         data = {'chat_id': self.chat_id,
                 'text': event.encode('utf-8') + ': ' + message.encode("utf-8")}
 
-        http_handler.request("POST",
+        http_call.request("POST",
                                 "/bot%s/%s" % (self.bot_token, "sendMessage"),
                                 headers={'Content-type': "application/x-www-form-urlencoded"},
                                 body=urlencode(data))
 
-        response = http_handler.getresponse()
+        response = http_call.getresponse()
         request_status = response.status
 
         if request_status == 200:
